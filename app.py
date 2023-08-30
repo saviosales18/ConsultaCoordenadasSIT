@@ -4,7 +4,7 @@ from selenium.webdriver.support.select import Select
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import openpyxl
+import pandas
 from time import sleep
 
 def get_coordinates(latitude, longitude, zona):
@@ -23,8 +23,6 @@ def get_coordinates(latitude, longitude, zona):
         opDatum.select_by_visible_text('SIRGAS_UTM_zona_23S')
     elif zona == "24":
         opDatum.select_by_visible_text('SIRGAS_UTM_zona_24S')
-    
-    sleep(1)
 
     # Colocando coordenadas latitude e longitude
     campoLat = driver.find_element(By.NAME, "vlXcoord")
