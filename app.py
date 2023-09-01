@@ -4,8 +4,19 @@ from selenium.webdriver.support.select import Select
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import geopandas as gpd
+from tkinter import *
+import tkinter as tk
 import pandas as pd
 from time import sleep
+
+# Tela principal
+janela = tk.Tk()
+
+# Titulo da janela
+janela.title("Consulta de Coordenadas")
+# Dimensões da janela (largura x altura)
+janela.geometry("400x300")
 
 def get_coordinates(latitude, longitude, zona):
     # Abrindo o site no Chrome
@@ -42,7 +53,7 @@ def get_coordinates(latitude, longitude, zona):
     trecho = driver.find_element(By.NAME, "nmTrecho")
     km = driver.find_element(By.NAME, "vlKm")
 
-    print("Rodovia:          ", rodovia.get_attribute('value'))
+    print("\nRodovia:          ", rodovia.get_attribute('value'))
     print("Trecho:           ", trecho.get_attribute('value'))
     print("Km:               ", km.get_attribute('value'))
 
@@ -89,6 +100,9 @@ while True:
     # Chama a função para obter as coordenadas
     get_coordinates(nLatitude, nLongitude, nZona)
 
-    continuar = input("Deseja continuar? (s/n): ")
+    continuar = input("\n\nDeseja continuar? (s/n): ")
     if continuar.lower() != "s":
         break  # Sair do loop se a resposta não for 's'
+
+# Loop principal
+janela.mainloop()
