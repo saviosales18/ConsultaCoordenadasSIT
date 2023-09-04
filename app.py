@@ -6,17 +6,18 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import geopandas as gpd
 from tkinter import *
-import tkinter as tk
+import tkinter as ttk
 import pandas as pd
 from time import sleep
 
 # Tela principal
-janela = tk.Tk()
-
+janela = Tk()
 # Titulo da janela
-janela.title("Consulta de Coordenadas")
+janela.title('Consulta de Coordenadas')
 # Dimensões da janela (largura x altura)
-janela.geometry("400x300")
+#janela.geometry('800x600')
+janela.configure(bg='white')
+
 
 def get_coordinates(latitude, longitude, zona):
     # Abrindo o site no Chrome
@@ -103,6 +104,7 @@ while True:
     continuar = input("\n\nDeseja continuar? (s/n): ")
     if continuar.lower() != "s":
         break  # Sair do loop se a resposta não for 's'
+
 
 # Loop principal
 janela.mainloop()
