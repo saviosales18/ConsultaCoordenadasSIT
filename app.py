@@ -4,8 +4,16 @@ from selenium.webdriver.support.select import Select
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from tkinter import *
+from tkinter import ttk
 import pandas as pd
 from time import sleep
+
+janela = Tk()
+janela.title('Consulta de Coordenadas')
+janela.geometry('800x600')
+janela.configure(bg='white')
+
 
 def get_coordinates(latitude, longitude, zona):
     # Abrindo o site no Chrome
@@ -92,3 +100,6 @@ while True:
     continuar = input("Deseja continuar? (s/n): ")
     if continuar.lower() != "s":
         break  # Sair do loop se a resposta não for 's'
+
+
+janela.mainloop()
