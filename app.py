@@ -5,18 +5,19 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import geopandas as gpd
+from shapely.geometry import Point
 from tkinter import *
 import tkinter as ttk
 import pandas as pd
 from time import sleep
 
 # Tela principal
-janela = Tk()
+#janela = Tk()
 # Titulo da janela
-janela.title('Consulta de Coordenadas')
+#janela.title('Consulta de Coordenadas')
 # Dimensões da janela (largura x altura)
 #janela.geometry('800x600')
-janela.configure(bg='white')
+#janela.configure(bg='white')
 
 
 def get_coordinates(latitude, longitude, zona):
@@ -64,7 +65,7 @@ def get_coordinates(latitude, longitude, zona):
     driver.quit()
 
     # Carregar a planilha
-    df = pd.read_excel("sreCompleto.xlsx")
+    df = pd.read_excel("C:\\Users\\savio.silva\\Documents\\consulta coordenadas\\ConsultaCoordenadasSIT\\sreCompleto.xlsx")
 
     # Filtrar as linhas que correspondem ao nome
     filtro = df['TRECHO'] == nome_pesquisa
@@ -107,4 +108,4 @@ while True:
 
 
 # Loop principal
-janela.mainloop()
+#janela.mainloop()
