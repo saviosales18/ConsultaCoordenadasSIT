@@ -7,17 +7,47 @@ from selenium.webdriver.support import expected_conditions as EC
 import geopandas as gpd
 from shapely.geometry import Point
 from tkinter import *
+import customtkinter
 import tkinter as ttk
+from PIL import Image, ImageTk
 import pandas as pd
 from time import sleep
 
-# Tela principal
-#janela = Tk()
-# Titulo da janela
-#janela.title('Consulta de Coordenadas')
-# Dimensões da janela (largura x altura)
-#janela.geometry('800x600')
-#janela.configure(bg='white')
+cor1 = '#ffffff' #branco
+cor2 = '#f5f5f5' #off white
+cor3 = '#059de3' #azul claro
+cor4 = '#012c40' #azul escuro
+cor5 = '#000000' #preto
+
+root = Tk()
+root.title('Consulta de Coordenadas')
+root.geometry('720x480')
+root.configure(bg=cor1)
+#root.attributes('-alpha',0.95)
+
+ldEsq = Frame(root, width=360, height=480, pady=0, padx=0, bg=cor3)
+ldEsq.place(x=0, y=0)
+
+titulo = Label(ldEsq, text='Consulta de Coordenadas', bg=cor3, fg=cor1, pady=50, padx=0, relief=FLAT, font= ('Calibre', 15))
+titulo.place(x=60, y=50)
+
+titulo_lat = Label(ldEsq, text='Digite Latitude:', bg=cor3, fg=cor2, pady=0, padx=0, relief=FLAT, font=('Calibre', 10), anchor='center')
+titulo_lat.place(x=60, y=150)
+
+entry_lat = Entry(ldEsq, width=32, font=('Calibre', 10))
+entry_lat.place(x=60, y=170)
+
+titulo_long = Label(ldEsq, text='Digite Longitude:', bg=cor3, fg=cor2, pady=0, padx=0, relief=FLAT, font=('Calibre', 10), anchor='center')
+titulo_long.place(x=60, y=210)
+
+entry_long = Entry(ldEsq, width=32, font=('Calibre', 10))
+entry_long.place(x=60, y=230)
+
+btn_consulta = Button(text='Consultar', font=('Calibre', 10))
+btn_consulta.place(x=145, y=300)
+
+ldDir = Frame(root, width=360, height=480, pady=0, padx=0, bg=cor1)
+ldDir.place(x=360, y=0)
 
 
 def get_coordinates(latitude, longitude, zona):
@@ -107,5 +137,6 @@ while True:
         break  # Sair do loop se a resposta não for 's'
 
 
-# Loop principal
-#janela.mainloop()
+#btnConsultar = Button(text='Consultar', command=click get_coordinates)
+
+root.mainloop()
