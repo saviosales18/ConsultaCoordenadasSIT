@@ -1,0 +1,39 @@
+# Requisitos do Projeto ConsultaCoordenadasSIT
+
+# Interface Gráfica
+# tkinter já vem instalado com Python
+
+# ==================== OPÇÃO 1: QGIS (RECOMENDADO) ====================
+# Para usar com QGIS, instale o QGIS Desktop e configure o Python:
+# 1. Instale QGIS: https://qgis.org/download/
+# 2. Use o Python do QGIS ou configure PYTHONPATH
+# 
+# Windows (exemplo):
+# set PYTHONPATH=C:\Program Files\QGIS 3.x\apps\qgis\python
+# 
+# Bibliotecas QGIS (já vem com instalação QGIS):
+# - qgis.core
+# - PyQt5
+
+# ==================== OPÇÃO 2: GeoPandas (ALTERNATIVA) ====================
+# Se não tiver QGIS, use GeoPandas (fallback automático)
+
+# Manipulação de Dados Geoespaciais
+geopandas>=0.14.0
+shapely>=2.0.0
+pandas>=2.0.0
+
+# Processamento Geoespacial
+fiona>=1.9.0
+pyproj>=3.6.0
+
+# ==================== OPCIONAIS ====================
+
+# Automação Web (apenas para app.py - opcional)
+selenium>=4.15.0
+
+# Imagens (opcional - apenas para app.py)
+Pillow>=10.0.0
+
+# Interface customizada (opcional - apenas para app.py)
+customtkinter>=5.2.0

@@ -1,0 +1,143 @@
+from qgis.core import (
+    QgsPointXY,
+    QgsGeometry,
+    QgsProject,
+    QgsVectorLayer,
+    QgsFeature,
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform
+)
+from qgis.PyQt.QtCore import QVariant
+from qgis.utils import iface
+import math
+
+try:
+    # Coordenadas fornecidas
+    x = 507023
+    y = 8646346
+    zone = 24
+
+    # Nome da camada de buffer e CRS dependendo da zona
+    if zone == 24:
+        buffer_layer_name = "FXD24"
+        municipios_layer_name = "municipios24"
+        shape_layer_name = "shape24"
+        crs_utm = QgsCoordinateReferenceSystem("EPSG:31984")  # SIRGAS 2000 / UTM zone 24S
+        
+    elif zone == 23:
+        buffer_layer_name = "FXD23"
+        municipios_layer_name = "municipios23"
+        shape_layer_name = "shape23"
+        crs_utm = QgsCoordinateReferenceSystem("EPSG:31983")  # SIRGAS 2000 / UTM zone 23S
+        
+    else:
+        raise ValueError("Zona inválida. Use 23 ou 24.")
+
+    # Alterar o SRC do projeto de acordo com a zona
+    QgsProject.instance().setCrs(crs_utm)
+
+    # Obter a camada de buffer pelo nome
+    buffer_layers = QgsProject.instance().mapLayersByName(buffer_layer_name)
+    if not buffer_layers:
+        print(f"Camada {buffer_layer_name} não encontrada")
+    else:
+        buffer_layer = buffer_layers[0]  # Pega a primeira camada encontrada com o nome
+        
+        municipios_layers = QgsProject.instance().mapLayersByName(municipios_layer_name)
+        if not municipios_layers:
+            print(f"Camada {municipios_layer_name} não encontrada")
+        else:
+            municipios_layer = municipios_layers[0]
+
+            # Obter a camada de shape pelo nome
+            shape_layers = QgsProject.instance().mapLayersByName(shape_layer_name)
+            if not shape_layers:
+                print(f"Camada {shape_layer_name} não encontrada")
+            else:
+                shape_layer = shape_layers[0]
+
+                # Definir CRS do projeto atual
+                crs_project = QgsProject.instance().crs()
+
+                # Criar um transformador de coordenadas
+                transform = QgsCoordinateTransform(crs_utm, crs_project, QgsProject.instance())
+
+                # Criar um ponto a partir das coordenadas fornecidas e transformá-lo
+                point = QgsPointXY(x, y)
+                point_geometry = QgsGeometry.fromPointXY(point)
+                point_geometry.transform(transform)
+
+                # Verificar se o ponto intersecta com algum polígono da camada de buffer
+                is_within_buffer = False
+                buffer_info = {}
+
+                for feature in buffer_layer.getFeatures():
+                    if feature.geometry().intersects(point_geometry):
+                        is_within_buffer = True
+                        # Obter os atributos do ponto
+                        buffer_info = {
+                            "RODOVIA": feature["RODOVIA"],
+                            "LOCAL_IN_": feature["LOCAL_IN_"],
+                            "LOCAL_FIM": feature["LOCAL_FIM"],
+                            "JURISDI_C": feature["JURISDI_C"],
+                            "TOTAL FXD": feature["TOTAL FXD"],
+                            "AMPARO LEG": feature["AMPARO LEG"],
+                            "TRECHO": f"{feature['LOCAL_IN_']} - {feature['LOCAL_FIM']}"
+                        }
+                        break
+
+                # Verificar em qual município o ponto está localizado
+                municipio_nome = "N/A"
+                for municipio in municipios_layer.getFeatures():
+                    if municipio.geometry().contains(point_geometry):
+                        municipio_nome = municipio["NM_MUN"]
+                        break
+
+                # Medir a distância perpendicular do ponto até a feição mais próxima na camada shape
+                min_distance = None
+                closest_feature = None
+
+                for shape_feature in shape_layer.getFeatures():
+                    shape_geometry = shape_feature.geometry()
+                    distance = point_geometry.distance(shape_geometry)
+                    if min_distance is None or distance < min_distance:
+                        min_distance = distance
+                        closest_feature = shape_feature
+
+                # Criar uma nova camada de vetor de pontos (permanente)
+                point_layer = QgsVectorLayer(
+                    f"Point?crs={crs_project.authid()}&field=id:integer&field=in_buffer:string(3)",
+                    "Marcação",
+                    "memory"
+                )
+                pr = point_layer.dataProvider()
+
+                # Adicionar o ponto à camada com um atributo indicando se está no buffer
+                feature = QgsFeature()
+                feature.setGeometry(point_geometry)
+                feature.setAttributes([1, "Sim" if is_within_buffer else "Não"])
+                pr.addFeature(feature)
+                point_layer.updateFields()
+                QgsProject.instance().addMapLayer(point_layer)
+
+                # Centralizar o mapa no ponto adicionado e garantir que o ponto seja visível
+                iface.mapCanvas().setExtent(point_layer.extent())
+                iface.mapCanvas().refresh()
+
+                # Printar o resultado no console
+                if is_within_buffer:
+                    print("Dentro da FXD")
+                    print(f"RODOVIA: {buffer_info.get('RODOVIA', 'N/A')}")
+                    print(f"TRECHO: {buffer_info.get('TRECHO', 'N/A')}")
+                    print(f"JURISDIÇÃO: {buffer_info.get('JURISDI_C', 'N/A')}")
+                    print(f"LARGURA FXD: {buffer_info.get('TOTAL FXD', 'N/A')}")
+                    print(f"AMPARO LEGEGAL: {buffer_info.get('AMPARO LEG', 'N/A')}")
+                    print(f"MUNICÍPIO: {municipio_nome}")
+                    if min_distance is not None:
+                        print(f"Coordenada distando aproximadamente: {min_distance:.2f}m do eixo da BA.")
+                else:
+                    print(f"Coordenada encontra-se cerca de: {min_distance:.2f}m do eixo da BA.")
+                    print(f"MUNICÍPIO: {municipio_nome}")
+                    
+except Exception as e:
+    print(f"Ocorreu um erro: {e}")

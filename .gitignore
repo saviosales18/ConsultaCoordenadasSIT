@@ -1,0 +1,93 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+~$*
+
+# Excel temporary files
+~$*.xlsx
+~$*.xls
+
+# CAD temporary files
+*.dwl
+*.dwl2
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pytest
+.pytest_cache/
+
+# Coverage
+.coverage
+htmlcov/
+
+# MyPy
+.mypy_cache/
+
+# Dados sensíveis (não commitar planilhas com dados)
+*.xlsx
+*.xls
+!requirements*.xlsx
+!MODELO*.xlsx
+
+# Arquivos grandes
+*.zip
+*.rar
+*.7z
+*.tar.gz
+
+# Banco de dados
+*.db
+*.sqlite
+*.sqlite3
+/SHAPES_ALINHADOS
+/SHAPES_ALINHADOS/ZONA_23
+*.prj
+*.dbf
+*.cpg
+*.cpg
+*.dbf
+*.prj
