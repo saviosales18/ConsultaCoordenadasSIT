@@ -12,7 +12,7 @@ import sys
 import os
 import argparse
 from pathlib import Path
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional, Dict, Any, List
 
 # Configuração PyQGIS
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
@@ -168,32 +168,109 @@ def buscar_municipio_por_coordenadas(ponto: QgsPointXY, zona: int) -> Optional[s
 # FUNÇÕES AUXILIARES - CÁLCULO DE KM
 # ============================================
 
-def calcular_km_no_eixo(ponto: QgsPointXY, geometria: QgsGeometry, 
-                        km_inicial: float, km_final: float) -> Optional[float]:
+def extrair_conexoes_trecho(trecho: str) -> Dict[str, List[str]]:
     """
-    Calcula o KM exato de um ponto ao longo do eixo rodoviário.
-    
-    Usa detecção inteligente baseada em percentil para determinar
-    se a geometria foi desenhada na direção correta ou invertida.
+    Extrai pontos de conexão (entroncamentos) de um trecho.
     
     Args:
-        ponto: Ponto a ser consultado
+        trecho: String do trecho (ex: "ENTR BA 526(P/CIA) - ENTR BR 324(km 615,9)")
+    
+    Returns:
+        Dict com 'inicio' e 'fim', cada um contendo lista de rodovias conectadas
+    """
+    import re
+    
+    conexoes = {'inicio': [], 'fim': []}
+    
+    if not trecho or ' - ' not in trecho:
+        return conexoes
+    
+    partes = trecho.split(' - ')
+    if len(partes) != 2:
+        return conexoes
+    
+    inicio, fim = partes[0].strip(), partes[1].strip()
+    
+    # Padrões para extrair códigos de rodovias
+    # Ex: "ENTR BA 526", "ENTR BR 324", "BA-001", "BR-101"
+    padroes = [
+        r'(?:ENTR\s+)?([A-Z]{2}[\s-]?\d{3})',  # BA 526, BR 324, BA-001
+        r'(?:ACESSO\s+)?([A-Z]{2}[\s-]?\d{3})',  # ACESSO BA 099
+    ]
+    
+    for texto, lista in [(inicio, conexoes['inicio']), (fim, conexoes['fim'])]:
+        for padrao in padroes:
+            matches = re.findall(padrao, texto, re.IGNORECASE)
+            for match in matches:
+                # Normaliza: remove espaços e hífens
+                rodovia = match.replace(' ', '').replace('-', '')
+                if rodovia not in lista:
+                    lista.append(rodovia)
+    
+    return conexoes
+
+
+def verificar_continuidade_trechos(trecho_atual: str, trecho_comparacao: str, posicao: str) -> bool:
+    """
+    Verifica se dois trechos são contínuos (um termina onde o outro começa).
+    
+    Args:
+        trecho_atual: Trecho atual sendo analisado
+        trecho_comparacao: Trecho anterior ou posterior
+        posicao: 'anterior' ou 'posterior'
+    
+    Returns:
+        True se os trechos são contínuos
+    """
+    if not trecho_atual or not trecho_comparacao:
+        return False
+    
+    conexoes_atual = extrair_conexoes_trecho(trecho_atual)
+    conexoes_comp = extrair_conexoes_trecho(trecho_comparacao)
+    
+    if posicao == 'anterior':
+        # Trecho anterior termina onde o atual começa
+        # Fim do anterior deve corresponder ao início do atual
+        return (
+            any(rod in conexoes_atual['inicio'] for rod in conexoes_comp['fim']) or
+            trecho_comparacao.split(' - ')[-1].strip() in trecho_atual
+        )
+    else:  # posterior
+        # Trecho atual termina onde o posterior começa
+        # Fim do atual deve corresponder ao início do posterior
+        return (
+            any(rod in conexoes_comp['inicio'] for rod in conexoes_atual['fim']) or
+            trecho_atual.split(' - ')[-1].strip() in trecho_comparacao
+        )
+
+
+def calcular_km_no_eixo(geometria: QgsGeometry, ponto: QgsPointXY, 
+                         km_inicial: float, km_final: float,
+                         atributos: Dict[str, Any] = None,
+                         todas_features: List[Tuple] = None) -> Optional[float]:
+    """
+    Calcula o KM no eixo rodoviário baseado na posição do ponto.
+    Considera continuidade entre trechos para validar orientação da geometria.
+    
+    Args:
         geometria: Geometria do eixo rodoviário
-        km_inicial: KM inicial do segmento
-        km_final: KM final do segmento
+        ponto: Ponto a ser projetado
+        km_inicial: KM inicial do trecho
+        km_final: KM final do trecho
+        atributos: Atributos da feature atual (incluindo TRECHO)
+        todas_features: Lista de todas as features para análise de continuidade
     
     Returns:
         KM calculado ou None se erro
     """
     try:
-        # Encontra o ponto mais próximo na linha
-        ponto_mais_proximo = geometria.nearestPoint(QgsGeometry.fromPointXY(ponto))
-        
-        if ponto_mais_proximo.isEmpty():
+        # Projeta o ponto na linha
+        ponto_projetado = geometria.nearestPoint(QgsGeometry.fromPointXY(ponto))
+        if ponto_projetado.isEmpty():
             return None
         
-        # Calcula distância ao longo da linha (em metros)
-        distancia_ao_longo = geometria.lineLocatePoint(ponto_mais_proximo)
+        # Calcula distância ao longo da linha
+        distancia_ao_longo = geometria.lineLocatePoint(ponto_projetado)
         comprimento_total = geometria.length()
         
         if comprimento_total == 0:
@@ -207,30 +284,197 @@ def calcular_km_no_eixo(ponto: QgsPointXY, geometria: QgsGeometry,
         km_opcao1 = km_inicial + (proporcao * (km_final - km_inicial))  # Normal
         km_opcao2 = km_final - (proporcao * (km_final - km_inicial))    # Invertida
         
-        # DETECÇÃO INTELIGENTE: usa percentil E valida range válido
-        opcao1_valida = km_inicial <= km_opcao1 <= km_final or km_final <= km_opcao1 <= km_inicial
-        opcao2_valida = km_inicial <= km_opcao2 <= km_final or km_final <= km_opcao2 <= km_inicial
+        # ====================================================================
+        # VALIDAÇÃO POR CONTINUIDADE DE TRECHOS (NOVA LÓGICA)
+        # ====================================================================
+        orientacao_validada = None
         
-        if percentual > 80:
-            # Perto do fim da linha (>80%) = geometria invertida
-            km_calculado = km_opcao2 if opcao2_valida else km_opcao1
-            debug_msg = f"✅ Geometria INVERTIDA (percentual {percentual:.1f}%)"
-        elif percentual < 20:
-            # Perto do início da linha (<20%) = geometria normal
-            km_calculado = km_opcao1 if opcao1_valida else km_opcao2
-            debug_msg = f"✅ Geometria NORMAL (percentual {percentual:.1f}%)"
+        if atributos and todas_features:
+            trecho_atual = atributos.get('TRECHO', '') or atributos.get('LOCAL_IN_', '') + ' - ' + atributos.get('LOCAL_FIM', '')
+            rodovia_atual = atributos.get('RODOVIA', '')
+            codigo_sre_atual = atributos.get('CÓDIGO SRE', atributos.get('COD_SRE', atributos.get('CODIGO_SRE', '')))
+            
+            if trecho_atual and rodovia_atual and codigo_sre_atual:
+                # Busca trechos anterior e posterior na mesma rodovia
+                trechos_rodovia = []
+                
+                for feat in todas_features:
+                    feat_rodovia = feat[1].get('RODOVIA', '')
+                    feat_cod_sre = feat[1].get('CÓDIGO SRE', feat[1].get('COD_SRE', feat[1].get('CODIGO_SRE', '')))
+                    feat_km_ini = feat[1].get('KM_INICIAL')
+                    feat_km_fim = feat[1].get('KM_FINAL')
+                    feat_local_ini = feat[1].get('LOCAL_IN_', '')
+                    feat_local_fim = feat[1].get('LOCAL_FIM', '')
+                    
+                    if feat_rodovia == rodovia_atual and feat_cod_sre and feat_km_ini is not None:
+                        trechos_rodovia.append({
+                            'cod_sre': feat_cod_sre,
+                            'km_ini': float(feat_km_ini),
+                            'km_fim': float(feat_km_fim) if feat_km_fim is not None else float(feat_km_ini),
+                            'local_ini': feat_local_ini,
+                            'local_fim': feat_local_fim
+                        })
+                
+                # Ordena por código SRE (indica sequência lógica dos trechos)
+                trechos_rodovia.sort(key=lambda x: x['cod_sre'])
+                
+                # Encontra índice do trecho atual
+                idx_atual = None
+                for i, t in enumerate(trechos_rodovia):
+                    if t['cod_sre'] == codigo_sre_atual:
+                        idx_atual = i
+                        break
+                
+                if idx_atual is not None and len(trechos_rodovia) > 1:
+                    continuidade_detectada = False
+                    
+                    # Verifica trecho anterior
+                    if idx_atual > 0:
+                        trecho_anterior = trechos_rodovia[idx_atual - 1]
+                        
+                        # O KM FINAL do anterior deve ser igual ao KM INICIAL do atual
+                        dif_km = abs(trecho_anterior['km_fim'] - km_inicial)
+                        
+                        if dif_km < 0.5:  # Tolerância de 500m
+                            continuidade_detectada = True
+                            print(f"   ✅ Continuidade validada: {trecho_anterior['cod_sre']} (fim={trecho_anterior['km_fim']:.2f}) → {codigo_sre_atual} (ini={km_inicial:.2f})")
+                    
+                    # Verifica trecho posterior
+                    if idx_atual < len(trechos_rodovia) - 1:
+                        trecho_posterior = trechos_rodovia[idx_atual + 1]
+                        
+                        # O KM FINAL do atual deve ser igual ao KM INICIAL do posterior
+                        dif_km = abs(km_final - trecho_posterior['km_ini'])
+                        
+                        if dif_km < 0.5:
+                            continuidade_detectada = True
+                            print(f"   ✅ Continuidade validada: {codigo_sre_atual} (fim={km_final:.2f}) → {trecho_posterior['cod_sre']} (ini={trecho_posterior['km_ini']:.2f})")
+                    
+                    # Se há continuidade validada, detectar orientação da geometria
+                    if continuidade_detectada and idx_atual is not None:
+                        # ESTRATÉGIA DEFINITIVA: Usar continuidade para determinar orientação
+                        # Se temos trecho anterior: o fim do anterior deve conectar com o início do atual
+                        # Isso nos diz QUAL extremo do trecho atual é o "início lógico"
+                        
+                        if km_inicial < km_final and idx_atual > 0:
+                            # Temos trecho anterior - verificar qual extremo conecta
+                            trecho_anterior = trechos_rodovia[idx_atual - 1]
+                            km_fim_anterior = trecho_anterior['km_fim']
+                            
+                            # Qual extremo do trecho atual está mais próximo do fim do anterior?
+                            dist_inicial_anterior = abs(km_inicial - km_fim_anterior)
+                            dist_final_anterior = abs(km_final - km_fim_anterior)
+                            
+                            if dist_inicial_anterior < dist_final_anterior:
+                                # KM_INICIAL conecta com o anterior = início lógico é KM_INICIAL
+                                # Portanto: geometria deveria começar no percentual 0% e ir até 100%
+                                # Se percentual BAIXO resulta em KM próximo de KM_INICIAL → NORMAL
+                                # Se percentual ALTO resulta em KM próximo de KM_INICIAL → INVERTIDA
+                                
+                                # Testar: onde está o ponto na geometria?
+                                if percentual < 50:  # Início da geometria
+                                    # Início da geometria deve ter KM baixo (próximo de KM_INICIAL)
+                                    dist_opcao1_inicial = abs(km_opcao1 - km_inicial)
+                                    dist_opcao2_inicial = abs(km_opcao2 - km_inicial)
+                                    
+                                    if dist_opcao1_inicial < dist_opcao2_inicial:
+                                        orientacao_validada = 'normal'
+                                        print(f"   🎯 Geometria NORMAL: início geom + KM próximo de inicial")
+                                    else:
+                                        orientacao_validada = 'invertida'
+                                        print(f"   🎯 Geometria INVERTIDA: início geom + KM longe de inicial")
+                                else:  # Fim da geometria (percentual >= 50%)
+                                    # Fim da geometria deve ter KM alto (próximo de KM_FINAL)
+                                    # Testar se km_opcao1 (cálculo normal) está próximo do fim
+                                    dist_opcao1_final = abs(km_opcao1 - km_final)
+                                    dist_opcao1_inicial = abs(km_opcao1 - km_inicial)
+                                    comprimento_trecho = km_final - km_inicial
+                                    
+                                    # Calcular proximidade RELATIVA (em % do comprimento do trecho)
+                                    prox_final_percent = (dist_opcao1_final / comprimento_trecho) * 100
+                                    prox_inicial_percent = (dist_opcao1_inicial / comprimento_trecho) * 100
+                                    
+                                    # Se está dentro de 10% do fim, considera próximo do fim
+                                    if prox_final_percent < 10:
+                                        # Muito próximo do fim = NORMAL
+                                        orientacao_validada = 'normal'
+                                        print(f"   🎯 Geometria NORMAL: fim geom + opcao1 {prox_final_percent:.1f}% do final")
+                                    elif prox_inicial_percent < 10:
+                                        # Muito próximo do início = INVERTIDA
+                                        orientacao_validada = 'invertida'
+                                        print(f"   🎯 Geometria INVERTIDA: fim geom + opcao1 {prox_inicial_percent:.1f}% do inicial")
+                                    elif dist_opcao1_inicial < dist_opcao1_final:
+                                        # Mais próximo do início = INVERTIDA
+                                        orientacao_validada = 'invertida'
+                                        print(f"   🎯 Geometria INVERTIDA: fim geom mas opcao1={km_opcao1:.2f} mais próximo de inicial")
+                                    else:
+                                        # Mais próximo do fim = NORMAL
+                                        orientacao_validada = 'normal'
+                                        print(f"   🎯 Geometria NORMAL: fim geom e opcao1={km_opcao1:.2f} mais próximo de final")
+                            else:
+                                # KM_FINAL conecta com o anterior = início lógico é KM_FINAL
+                                # Geometria foi desenhada invertida em relação à quilometragem
+                                orientacao_validada = 'invertida'
+                                print(f"   🎯 Geometria INVERTIDA: KM_FINAL ({km_final:.2f}) conecta com anterior")
+                        
+                        elif km_inicial < km_final and idx_atual == 0:
+                            # Primeiro trecho da rodovia - usar KM 0 como referência
+                            # Se km_inicial ≈ 0, o início lógico é KM_INICIAL
+                            if km_inicial < 1.0:  # Começa próximo do KM 0
+                                # Percentual baixo deve resultar em KM baixo
+                                if percentual < 50:
+                                    dist_opcao1_inicial = abs(km_opcao1 - km_inicial)
+                                    dist_opcao2_inicial = abs(km_opcao2 - km_inicial)
+                                    orientacao_validada = 'normal' if dist_opcao1_inicial < dist_opcao2_inicial else 'invertida'
+                                    print(f"   🎯 Primeiro trecho: geometria {'NORMAL' if orientacao_validada == 'normal' else 'INVERTIDA'}")
+                                else:
+                                    dist_opcao1_final = abs(km_opcao1 - km_final)
+                                    dist_opcao2_final = abs(km_opcao2 - km_final)
+                                    orientacao_validada = 'normal' if dist_opcao1_final < dist_opcao2_final else 'invertida'
+                                    print(f"   🎯 Primeiro trecho: geometria {'NORMAL' if orientacao_validada == 'normal' else 'INVERTIDA'}")
+                            else:
+                                # Não começa no KM 0 - usar heurística
+                                orientacao_validada = 'normal'
+                                print(f"   🎯 Primeiro trecho sem KM 0: assumindo NORMAL")
+                        
+                        elif km_inicial < km_final:
+                            # Sem trecho anterior válido - usar heurística
+                            if percentual > 70:
+                                dist_opcao1_final = abs(km_opcao1 - km_final)
+                                dist_opcao2_final = abs(km_opcao2 - km_final)
+                                orientacao_validada = 'normal' if dist_opcao1_final < dist_opcao2_final else 'invertida'
+                            else:
+                                dist_opcao1_inicial = abs(km_opcao1 - km_inicial)
+                                dist_opcao2_inicial = abs(km_opcao2 - km_inicial)
+                                orientacao_validada = 'normal' if dist_opcao1_inicial < dist_opcao2_inicial else 'invertida'
+                            print(f"   🎯 Heurística: geometria {'NORMAL' if orientacao_validada == 'normal' else 'INVERTIDA'}")
+                        else:
+                            # KM decrescente
+                            orientacao_validada = 'normal'
+                            print(f"   🎯 KM DECRESCENTE ({km_inicial:.2f} → {km_final:.2f})")
+        
+        # ====================================================================
+        # ESCOLHA DO KM BASEADO EM VALIDAÇÃO
+        # ====================================================================
+        
+        if orientacao_validada == 'normal':
+            # Validação confirmou: usar cálculo normal
+            km_calculado = km_opcao1
+            debug_msg = f"✅ Orientação NORMAL validada por continuidade (KM {km_inicial:.2f} → {km_final:.2f})"
+        elif orientacao_validada == 'invertida':
+            # Validação confirmou: usar cálculo invertido
+            km_calculado = km_opcao2
+            debug_msg = f"✅ Orientação INVERTIDA validada por continuidade (KM {km_inicial:.2f} → {km_final:.2f})"
         else:
-            # Zona intermediária (20-80%): valida qual está no range
-            if opcao1_valida:
+            # SEM VALIDAÇÃO: usar heurística baseada em crescente/decrescente
+            if km_inicial < km_final:
+                # KM crescente: geometria deve seguir ordem normal
                 km_calculado = km_opcao1
-                debug_msg = f"✅ Zona intermediária - validado km_opcao1 (percentual {percentual:.1f}%)"
-            elif opcao2_valida:
-                km_calculado = km_opcao2
-                debug_msg = f"✅ Zona intermediária - validado km_opcao2 (percentual {percentual:.1f}%)"
+                debug_msg = f"✅ Geometria NORMAL (KM crescente: {km_inicial:.2f} → {km_final:.2f})"
             else:
-                # Escolhe o mais próximo do range válido
-                km_calculado = km_opcao1
-                debug_msg = f"⚠️  Nenhuma opção válida - usando km_opcao1 (percentual {percentual:.1f}%)"
+                # KM decrescente: geometria deve seguir ordem invertida
+                km_calculado = km_opcao2
+                debug_msg = f"✅ Geometria INVERTIDA (KM decrescente: {km_inicial:.2f} → {km_final:.2f})"
         
         # Debug info
         print(f"\n🔍 DEBUG KM:")
@@ -368,12 +612,27 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
     
     print(f"   Total de feições no shape{zona}: {total_features}")
     
+    # Primeiro, coletar TODAS as features para análise de continuidade
+    todas_features = []
+    fields = [f.name() for f in shape_layer.fields()]
+    
     for feature in shape_layer.getFeatures():
-        features_processadas += 1
         geom = feature.geometry()
-        
         if geom.isEmpty():
             continue
+        
+        attrs = feature.attributes()
+        atributos_dict = {}
+        
+        for i, field in enumerate(fields):
+            atributos_dict[field] = attrs[i]
+        
+        todas_features.append((geom, atributos_dict))
+    
+    # Agora processar cada feature para encontrar a mais próxima
+    for feature_data in todas_features:
+        features_processadas += 1
+        geom, atributos_dict = feature_data
         
         # Calcular distância ao eixo
         distancia = calcular_distancia_do_eixo(ponto, geom)
@@ -387,26 +646,24 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
         
         features_dentro_limite += 1
         
-        # Extrair atributos
-        attrs = feature.attributes()
-        fields = [f.name() for f in shape_layer.fields()]
-        
         # Buscar campos de KM
         km_inicial = None
         km_final = None
         
-        for i, field in enumerate(fields):
+        for field, valor in atributos_dict.items():
             field_lower = field.lower()
             if 'km' in field_lower and 'inicial' in field_lower:
-                km_inicial = attrs[i]
+                km_inicial = valor
             elif 'km' in field_lower and 'final' in field_lower:
-                km_final = attrs[i]
+                km_final = valor
         
         if km_inicial is None or km_final is None:
             continue
         
-        # Calcular KM exato
-        km_calculado = calcular_km_no_eixo(ponto, geom, km_inicial, km_final)
+        # Calcular KM exato (passando atributos e todas as features para análise de continuidade)
+        km_calculado = calcular_km_no_eixo(geom, ponto, km_inicial, km_final, 
+                                           atributos=atributos_dict, 
+                                           todas_features=todas_features)
         
         if km_calculado is None:
             continue
@@ -424,14 +681,8 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
                 'km_calculado': km_calculado,
                 'dentro_fxd': dentro_fxd,
                 'municipio': municipio,
-                'attributes': {}
+                'attributes': atributos_dict.copy()
             }
-            
-            # Capturar TODOS os atributos do shape
-            for i, field in enumerate(fields):
-                valor = attrs[i]
-                if field.upper() not in ['FID', 'SHAPE_LENG', 'SHAPE_LEN', 'OBJECTID', 'SHAPE_AREA']:
-                    resultado_final['attributes'][field] = valor
             
             # Adicionar atributos da FXD se estiver dentro
             if fxd_info:
