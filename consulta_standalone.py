@@ -32,7 +32,7 @@ from qgis.core import (
 # CONFIGURAÇÕES GLOBAIS
 # ============================================
 
-QGIS_PATH = r"C:\Program Files\QGIS 3.12"
+QGIS_PATH = r"C:\Program Files\QGIS*"
 SHAPES_DIR = Path(__file__).parent / "LARGURAS FXD"
 
 # Mapeamento de zonas UTM para EPSG (SIRGAS 2000)
