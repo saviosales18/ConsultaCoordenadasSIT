@@ -70,12 +70,6 @@ echo [INFO] QGIS encontrado em: %QGIS_PATH%
 echo [INFO] Python QGIS: %PYTHON_QGIS%
 echo.
 
-echo.
-echo ========================================
-echo   CONSULTA STANDALONE - PyQGIS
-echo ========================================
-echo.
-
 REM Verificar argumentos
 if "%~1"=="" (
     echo USO:
@@ -104,14 +98,6 @@ if "%ZONA%"=="" (
     pause
     exit /b 1
 )
-
-echo Coordenadas:
-echo   X:    %X%
-echo   Y:    %Y%
-echo   Zona: %ZONA%
-echo.
-echo Executando consulta...
-echo.
 
 REM Executar com Python do QGIS
 "%PYTHON_QGIS%" consulta_standalone.py --x %X% --y %Y% --zona %ZONA%

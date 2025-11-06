@@ -337,7 +337,6 @@ def calcular_km_no_eixo(geometria: QgsGeometry, ponto: QgsPointXY,
                         
                         if dif_km < 0.5:  # Tolerância de 500m
                             continuidade_detectada = True
-                            print(f"   ✅ Continuidade validada: {trecho_anterior['cod_sre']} (fim={trecho_anterior['km_fim']:.2f}) → {codigo_sre_atual} (ini={km_inicial:.2f})")
                     
                     # Verifica trecho posterior
                     if idx_atual < len(trechos_rodovia) - 1:
@@ -348,7 +347,6 @@ def calcular_km_no_eixo(geometria: QgsGeometry, ponto: QgsPointXY,
                         
                         if dif_km < 0.5:
                             continuidade_detectada = True
-                            print(f"   ✅ Continuidade validada: {codigo_sre_atual} (fim={km_final:.2f}) → {trecho_posterior['cod_sre']} (ini={trecho_posterior['km_ini']:.2f})")
                     
                     # Se há continuidade validada, detectar orientação da geometria
                     if continuidade_detectada and idx_atual is not None:
@@ -379,10 +377,8 @@ def calcular_km_no_eixo(geometria: QgsGeometry, ponto: QgsPointXY,
                                     
                                     if dist_opcao1_inicial < dist_opcao2_inicial:
                                         orientacao_validada = 'normal'
-                                        print(f"   🎯 Geometria NORMAL: início geom + KM próximo de inicial")
                                     else:
                                         orientacao_validada = 'invertida'
-                                        print(f"   🎯 Geometria INVERTIDA: início geom + KM longe de inicial")
                                 else:  # Fim da geometria (percentual >= 50%)
                                     # Fim da geometria deve ter KM alto (próximo de KM_FINAL)
                                     # Testar se km_opcao1 (cálculo normal) está próximo do fim
@@ -398,24 +394,19 @@ def calcular_km_no_eixo(geometria: QgsGeometry, ponto: QgsPointXY,
                                     if prox_final_percent < 10:
                                         # Muito próximo do fim = NORMAL
                                         orientacao_validada = 'normal'
-                                        print(f"   🎯 Geometria NORMAL: fim geom + opcao1 {prox_final_percent:.1f}% do final")
                                     elif prox_inicial_percent < 10:
                                         # Muito próximo do início = INVERTIDA
                                         orientacao_validada = 'invertida'
-                                        print(f"   🎯 Geometria INVERTIDA: fim geom + opcao1 {prox_inicial_percent:.1f}% do inicial")
                                     elif dist_opcao1_inicial < dist_opcao1_final:
                                         # Mais próximo do início = INVERTIDA
                                         orientacao_validada = 'invertida'
-                                        print(f"   🎯 Geometria INVERTIDA: fim geom mas opcao1={km_opcao1:.2f} mais próximo de inicial")
                                     else:
                                         # Mais próximo do fim = NORMAL
                                         orientacao_validada = 'normal'
-                                        print(f"   🎯 Geometria NORMAL: fim geom e opcao1={km_opcao1:.2f} mais próximo de final")
                             else:
                                 # KM_FINAL conecta com o anterior = início lógico é KM_FINAL
                                 # Geometria foi desenhada invertida em relação à quilometragem
                                 orientacao_validada = 'invertida'
-                                print(f"   🎯 Geometria INVERTIDA: KM_FINAL ({km_final:.2f}) conecta com anterior")
                         
                         elif km_inicial < km_final and idx_atual == 0:
                             # Primeiro trecho da rodovia - usar KM 0 como referência
@@ -451,7 +442,6 @@ def calcular_km_no_eixo(geometria: QgsGeometry, ponto: QgsPointXY,
                         else:
                             # KM decrescente
                             orientacao_validada = 'normal'
-                            print(f"   🎯 KM DECRESCENTE ({km_inicial:.2f} → {km_final:.2f})")
         
         # ====================================================================
         # ESCOLHA DO KM BASEADO EM VALIDAÇÃO
@@ -460,28 +450,17 @@ def calcular_km_no_eixo(geometria: QgsGeometry, ponto: QgsPointXY,
         if orientacao_validada == 'normal':
             # Validação confirmou: usar cálculo normal
             km_calculado = km_opcao1
-            debug_msg = f"✅ Orientação NORMAL validada por continuidade (KM {km_inicial:.2f} → {km_final:.2f})"
         elif orientacao_validada == 'invertida':
             # Validação confirmou: usar cálculo invertido
             km_calculado = km_opcao2
-            debug_msg = f"✅ Orientação INVERTIDA validada por continuidade (KM {km_inicial:.2f} → {km_final:.2f})"
         else:
             # SEM VALIDAÇÃO: usar heurística baseada em crescente/decrescente
             if km_inicial < km_final:
                 # KM crescente: geometria deve seguir ordem normal
                 km_calculado = km_opcao1
-                debug_msg = f"✅ Geometria NORMAL (KM crescente: {km_inicial:.2f} → {km_final:.2f})"
             else:
                 # KM decrescente: geometria deve seguir ordem invertida
                 km_calculado = km_opcao2
-                debug_msg = f"✅ Geometria INVERTIDA (KM decrescente: {km_inicial:.2f} → {km_final:.2f})"
-        
-        # Debug info
-        print(f"\n🔍 DEBUG KM:")
-        print(f"   Percentual: {percentual:.1f}%")
-        print(f"   Opção 1 (normal): {km_opcao1:.3f} km")
-        print(f"   Opção 2 (invertida): {km_opcao2:.3f} km")
-        print(f"   {debug_msg}")
         
         return km_calculado
     
@@ -532,11 +511,6 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
     ponto = QgsPointXY(x, y)
     ponto_geom = QgsGeometry.fromPointXY(ponto)
     
-    print(f"\n📍 Consultando coordenadas:")
-    print(f"   X: {x}")
-    print(f"   Y: {y}")
-    print(f"   Zona: {zona} (EPSG:{epsg})")
-    
     # ========================================
     # 1. VERIFICAR SE ESTÁ DENTRO DA FXD (polígono)
     # ========================================
@@ -545,7 +519,6 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
     
     fxd_shape = SHAPES_DIR / f"FXD{zona}.shp"
     if fxd_shape.exists():
-        print(f"\n🔍 Verificando FXD (Faixa de Domínio)...")
         fxd_layer = QgsVectorLayer(str(fxd_shape), "FXD", "ogr")
         
         if fxd_layer.isValid():
@@ -560,7 +533,7 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
                         if field.upper() not in ['FID', 'SHAPE_LENG', 'SHAPE_LEN', 'OBJECTID', 'SHAPE_AREA']:
                             fxd_info[field] = attrs[i]
                     
-                    print(f"   ✅ Ponto DENTRO da Faixa de Domínio")
+                    print(f"\n✅ Ponto DENTRO da Faixa de Domínio")
                     break
     
     # ========================================
@@ -570,7 +543,6 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
     
     munic_shape = SHAPES_DIR / f"municipios{zona}.shp"
     if munic_shape.exists():
-        print(f"\n🔍 Buscando município...")
         munic_layer = QgsVectorLayer(str(munic_shape), "municipios", "ogr")
         
         if munic_layer.isValid():
@@ -582,7 +554,6 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
                     for i, field in enumerate(fields):
                         if any(x in field.upper() for x in ['NM_MUN', 'MUNICIPIO', 'MUNIC', 'NOME']):
                             municipio = attrs[i]
-                            print(f"   ✅ Município: {municipio}")
                             break
                     break
     
@@ -593,8 +564,6 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
     if not shape_shape.exists():
         print(f"\n❌ Shapefile shape{zona}.shp não encontrado")
         return None
-    
-    print(f"\n🔍 Buscando eixo rodoviário mais próximo...")
     
     shape_layer = QgsVectorLayer(str(shape_shape), "shape", "ogr")
     
@@ -609,8 +578,6 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
     features_processadas = 0
     features_dentro_limite = 0
     distancia_maxima = 200  # Aumentado para 200m
-    
-    print(f"   Total de feições no shape{zona}: {total_features}")
     
     # Primeiro, coletar TODAS as features para análise de continuidade
     todas_features = []
@@ -688,17 +655,12 @@ def consultar_coordenadas(x: float, y: float, zona: int) -> Optional[Dict[str, A
             if fxd_info:
                 resultado_final['fxd_info'] = fxd_info
     
-    print(f"   Feições processadas: {features_processadas}")
-    print(f"   Feições dentro do limite (<{distancia_maxima}m): {features_dentro_limite}")
-    
     if resultado_final:
-        print(f"   ✅ Eixo encontrado - Distância: {resultado_final['distancia_eixo']:.2f}m")
         return resultado_final
     
-    print(f"   ❌ Nenhuma feição encontrada dentro do limite de {distancia_maxima}m.")
+    print(f"\n❌ Nenhuma feição encontrada dentro do limite de {distancia_maxima}m.")
     if menor_distancia != float('inf'):
-        print(f"   ℹ️  Rodovia mais próxima está a {menor_distancia:.2f}m de distância.")
-        print(f"   💡 Coordenada pode estar muito longe das rodovias ou em zona incorreta.")
+        print(f"ℹ️  Rodovia mais próxima está a {menor_distancia:.2f}m de distância.")
     return None
 
 
@@ -738,7 +700,7 @@ def exibir_resultado(resultado: Dict[str, Any]) -> None:
     
     # Extrair informações (priorizar FXD quando dentro)
     rodovia = buscar_campo(['RODOVIA', 'NOME', 'SIGLA']) or 'N/A'
-    cod_sre = buscar_campo(['COD_SRE', 'SRE', 'CODIGO']) or 'N/A'
+    cod_sre = buscar_campo(['COD_SRE', 'SRE', 'CODIGO', 'CODIGO_SRE']) or 'N/A'
     jurisdicao = buscar_campo(['JURISDI_C', 'JURISDICAO', 'JURISD', 'ESFERA'])
     largura_fxd = buscar_campo(['TOTAL FXD', 'LARGURA', 'LARG_FXD', 'FXD', 'FAIXA'])
     amparo_legal = buscar_campo(['AMPARO LEG', 'AMPARO', 'LEI', 'LEGAL', 'LEGISL'])
@@ -754,44 +716,31 @@ def exibir_resultado(resultado: Dict[str, Any]) -> None:
     if local_ini and local_fim:
         trecho = f"{local_ini} - {local_fim}"
     else:
-        trecho = buscar_campo(['TRECHO', 'DESCRICAO', 'DESC'])
+        trecho = buscar_campo(['TRECHO', 'DESCRICAO', 'DESC']) or 'N/A'
+    
+    # Formatar rodovia (adicionar BA - se necessário)
+    if rodovia and rodovia != 'N/A' and not rodovia.startswith('BA'):
+        rodovia = f"BA - {rodovia}"
     
     # Status FXD
     dentro_fxd = resultado.get('dentro_fxd', False)
+    status_fxd = "⚠️  DENTRO DA FXD" if dentro_fxd else "✅ FORA DA FXD"
     
     # EXIBIR RESULTADO
-    print("\n" + "="*60)
-    if dentro_fxd:
-        print("⚠️  DENTRO DA FXD")
-    else:
-        print("✅ FORA DA FXD")
-    print("="*60)
-    
-    # Informações principais
+    print(f"\n{'='*76}")
+    print(status_fxd)
+    print(f"{'='*76}")
+    print(f"\nCÓDIGO SRE:        {cod_sre}")
     print(f"RODOVIA:           {rodovia}")
-    
-    if trecho:
-        print(f"TRECHO:            {trecho}")
-    
-    if jurisdicao:
-        print(f"JURISDIÇÃO:        {jurisdicao}")
-    
-    if largura_fxd:
-        print(f"LARGURA FXD:       {largura_fxd}")
-    
-    if amparo_legal:
-        print(f"AMPARO LEGAL:      {amparo_legal}")
-    
-    print(f"CÓDIGO SRE:        {cod_sre}")
-    print(f"MUNICÍPIO:         {municipio}")
-    
-    if tipo_pavimento:
-        print(f"PAVIMENTAÇÃO:      {tipo_pavimento}")
-    
-    print(f"DISTÂNCIA DO EIXO: {resultado['distancia_eixo']:.2f} m")
+    print(f"TRECHO:            {trecho}")
+    print(f"MUNICÍPIO:         {municipio.upper() if municipio != 'N/A' else 'N/A'}")
     print(f"KM CALCULADO:      {resultado['km_calculado']:.2f} km")
-    
-    print("="*60)
+    print(f"JURISDIÇÃO:        {jurisdicao if jurisdicao else 'N/A'}")
+    print(f"AMPARO LEGAL:      {amparo_legal if amparo_legal else 'N/A'}")
+    print(f"LARGURA FXD:       {largura_fxd if largura_fxd else 'N/A'}")
+    print(f"PAVIMENTAÇÃO:      {tipo_pavimento if tipo_pavimento else 'N/A'}")
+    print(f"DISTÂNCIA DO EIXO: {resultado['distancia_eixo']:.2f} m")
+    print(f"\n{'='*76}")
 
 
 # ============================================
@@ -821,8 +770,17 @@ Exemplos:
     
     args = parser.parse_args()
     
+    # Cabeçalho simplificado
+    print("=" * 76)
+    print("  CONSULTA - PyQGIS")
+    print("=" * 76)
+    print(f"\nCoordenadas:")
+    print(f"  X:    {int(args.x)}")
+    print(f"  Y:    {int(args.y)}")
+    print(f"  Zona: {args.zona}")
+    
     # Inicializar QGIS
-    print("🔧 Inicializando PyQGIS...")
+    print("\n🔧 Inicializando PyQGIS...")
     
     QgsApplication.setPrefixPath(QGIS_PATH, True)
     qgs = QgsApplication([], False)
